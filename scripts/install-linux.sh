@@ -21,6 +21,23 @@ fi
 
 export DEBIAN_FRONTEND=noninteractive
 
+install_root=/Apps/Meshstick
+repo_root=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
+if [ "$repo_root" != "$install_root" ]; then
+    echo "Copie des fichiers vers $install_root"
+    mkdir -p "$install_root/scripts" "$install_root/images"
+    cp -a "$SCRIPT_DIR/." "$install_root/scripts/"
+    for name in README.md LICENSE .gitattributes; do
+        if [ -f "$repo_root/$name" ]; then
+            cp -a "$repo_root/$name" "$install_root/$name"
+        fi
+    done
+    if [ -d "$repo_root/images" ]; then
+        cp -a "$repo_root/images/." "$install_root/images/"
+    fi
+    SCRIPT_DIR=$install_root/scripts
+fi
+
 require_ubuntu_codename() {
     case "$1" in
         jammy|noble|questing|resolute) ;;

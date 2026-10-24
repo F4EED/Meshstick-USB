@@ -110,8 +110,38 @@ function New-MeshstickShortcut {
     Write-Host "Raccourci bureau : $lnkPath"
 }
 
+function Install-MeshstickLayout {
+    $installRoot = "C:\Apps\Meshstick"
+    $sourceRoot = [System.IO.Path]::GetFullPath((Split-Path $PSScriptRoot -Parent)).TrimEnd('\')
+    $destRoot = [System.IO.Path]::GetFullPath($installRoot).TrimEnd('\')
+    if ($sourceRoot.Equals($destRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+        return $false
+    }
+
+    New-Item -ItemType Directory -Force -Path (Join-Path $installRoot "scripts") | Out-Null
+    Copy-Item -Path (Join-Path $PSScriptRoot "*") -Destination (Join-Path $installRoot "scripts") -Recurse -Force
+    foreach ($name in @("README.md", "LICENSE", ".gitattributes")) {
+        $src = Join-Path $sourceRoot $name
+        if (Test-Path -LiteralPath $src) {
+            Copy-Item -LiteralPath $src -Destination (Join-Path $installRoot $name) -Force
+        }
+    }
+    $images = Join-Path $sourceRoot "images"
+    if (Test-Path -LiteralPath $images) {
+        $destImages = Join-Path $installRoot "images"
+        New-Item -ItemType Directory -Force -Path $destImages | Out-Null
+        Copy-Item -Path (Join-Path $images "*") -Destination $destImages -Recurse -Force
+    }
+    Write-Host "Fichiers installes dans $installRoot"
+    return $true
+}
+
 if ($ShortcutOnly) {
-    New-MeshstickShortcut
+    if (Install-MeshstickLayout) {
+        & "C:\Apps\Meshstick\scripts\install-windows.ps1" -ShortcutOnly
+    } else {
+        New-MeshstickShortcut
+    }
     exit 0
 }
 
@@ -119,6 +149,11 @@ if (-not (Test-IsAdmin)) {
     $arg = "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" -Distribution `"$Distribution`" -OwnerName `"$OwnerName`""
     $elevated = Start-Process -FilePath "powershell.exe" -Verb RunAs -Wait -PassThru -ArgumentList $arg
     exit $elevated.ExitCode
+}
+
+if (Install-MeshstickLayout) {
+    & "C:\Apps\Meshstick\scripts\install-windows.ps1" -Distribution $Distribution -OwnerName $OwnerName
+    exit 0
 }
 
 function Start-MeshstickUbuntu {

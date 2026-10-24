@@ -41,7 +41,7 @@ Le script installe `meshtasticd`, règle la radio pour la France (réseau [Gauli
 powershell -ExecutionPolicy Bypass -File .\scripts\install-windows.ps1
 ```
 
-Acceptez la fenêtre **Contrôle de compte d’utilisateur**. Le script installe Ubuntu dans WSL 2 si besoin, usbipd, Google Chrome s’il manque, le démon, le pare-feu, une tâche à l’ouverture de session, et le raccourci bureau **Meshstick USB**. Si le texte demande un redémarrage, redémarrez Windows puis relancez la même commande.
+Acceptez la fenêtre **Contrôle de compte d’utilisateur**. Le script crée `C:\Apps\Meshstick`, y copie ce guide et les scripts, puis installe Ubuntu dans WSL 2 si besoin, usbipd, Google Chrome s’il manque, le démon, le pare-feu, une tâche à l’ouverture de session, et le raccourci bureau **Meshstick USB**. Le raccourci et la tâche utilisent `C:\Apps\Meshstick`, même si vous avez lancé l’installation depuis un autre dossier. Si le texte demande un redémarrage, redémarrez Windows puis relancez la même commande.
 
 **Ubuntu, Linux Mint ou Debian.** Dans un terminal ouvert dans le dossier `Meshstick_USB` :
 
@@ -49,11 +49,15 @@ Acceptez la fenêtre **Contrôle de compte d’utilisateur**. Le script installe
 sudo bash scripts/install-linux.sh
 ```
 
-Saisissez le mot de passe Linux. Le script installe le démon, la règle USB, Chromium s’il n’y a pas déjà Chrome, et un lanceur **Meshstick USB**.
+Saisissez le mot de passe Linux. Le script crée `/Apps/Meshstick`, y copie ce guide et les scripts, puis installe le démon, la règle USB, Chromium s’il n’y a pas déjà Chrome, et un lanceur **Meshstick USB**. Le lanceur ouvre `/Apps/Meshstick/scripts/launch-linux.sh`.
 
 ### 3. Ouvrir l’interface
 
-**Windows.** Double-cliquez sur le raccourci **Meshstick USB** du bureau. Acceptez à nouveau le contrôle de compte. Chrome s’ouvre sur `https://127.0.0.1:9443`.
+**Windows.** Double-cliquez sur le raccourci **Meshstick USB** du bureau. C’est cette icône :
+
+![Icône de lancement Meshstick USB sous Windows](images/icone-lancement-windows.png)
+
+Acceptez à nouveau le contrôle de compte. Chrome s’ouvre sur `https://127.0.0.1:9443`.
 
 **Linux.** Double-cliquez sur le lanceur **Meshstick USB**, ou lancez :
 
@@ -114,7 +118,7 @@ Meshstick --USB--> usbipd-win --WSL2--> meshtasticd
 
 ## Plusieurs ordinateurs
 
-Copiez le dossier `Meshstick_USB` sur chaque PC et lancez le script de cet exemplaire. Le raccourci et la tâche Windows mémorisent ce chemin : si le dossier est déplacé ensuite, relancez l’installation.
+Copiez le dossier sur chaque PC et lancez le script. L’installation crée ensuite son propre dossier : `C:\Apps\Meshstick` sous Windows, `/Apps/Meshstick` sous Linux. Le raccourci, la tâche et le lanceur pointent vers ce dossier.
 
 Chaque stick garde son propre identifiant radio. Pour les distinguer sur le réseau Gaulix, donnez un nom différent à chaque PC, une seule fois, à l’installation.
 
