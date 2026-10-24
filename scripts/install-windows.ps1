@@ -24,6 +24,114 @@ function Test-IsAdmin {
     return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
+function Test-MeshstickNetwork {
+    foreach ($hostName in @("github.com", "archive.ubuntu.com", "ppa.launchpadcontent.net")) {
+        $client = $null
+        try {
+            $client = New-Object System.Net.Sockets.TcpClient
+            $iar = $client.BeginConnect($hostName, 443, $null, $null)
+            $ok = $iar.AsyncWaitHandle.WaitOne(8000, $false)
+            if ($ok -and $client.Connected) {
+                $client.EndConnect($iar)
+                $client.Close()
+                return $true
+            }
+        } catch {
+        } finally {
+            if ($client) { $client.Close() }
+        }
+    }
+    return $false
+}
+
+function Test-MeshstickInstallPrereqs {
+    param([string]$DistributionName)
+
+    if (-not [Environment]::Is64BitOperatingSystem) {
+        throw "Windows 64 bits est requis pour meshtasticd via WSL 2."
+    }
+    if (-not [Environment]::Is64BitProcess) {
+        throw "Ce PowerShell est en 32 bits. Ouvrez Windows PowerShell (x64)."
+    }
+    Write-Host "Prerequis OK : Windows 64 bits, PowerShell 64 bits"
+
+    $os = Get-CimInstance Win32_OperatingSystem
+    $build = [int]$os.BuildNumber
+    if ($build -lt 19041) {
+        throw "Windows 10 version 2004 (build 19041) ou Windows 11 est requis. Build detecte : $build."
+    }
+    Write-Host "Prerequis OK : Windows build $build"
+
+    $computer = Get-CimInstance Win32_ComputerSystem
+    $cpu = Get-CimInstance Win32_Processor | Select-Object -First 1
+    if ($computer.HypervisorPresent) {
+        Write-Host "Prerequis OK : virtualisation (hyperviseur present, WSL 2)"
+    } elseif ($cpu.VirtualizationFirmwareEnabled -eq $false -or $cpu.SecondLevelAddressTranslationExtensions -eq $false) {
+        throw "La virtualisation est desactivee dans le firmware. WSL 2, requis par meshtasticd sous Windows, a besoin de VT-x ou AMD-V dans le BIOS ou l'UEFI."
+    } else {
+        Write-Host "Prerequis OK : virtualisation firmware"
+    }
+
+    if (-not (Get-Command wsl.exe -ErrorAction SilentlyContinue)) {
+        throw "wsl.exe est introuvable. Windows 10 version 2004 ou Windows 11 avec le composant Sous-systeme Windows pour Linux est requis."
+    }
+    Write-Host "Prerequis OK : wsl.exe"
+
+    $wslList = (& wsl.exe -l -v 2>&1 | Out-String) -replace "`0", ""
+    $distroInstalled = $wslList -match "(?m)^\s*\*?\s*$([regex]::Escape($DistributionName))\s+"
+    $usbipdReady = [bool](Get-Command usbipd -ErrorAction SilentlyContinue) -or (Test-Path "C:\Program Files\usbipd-win\usbipd.exe")
+    if (-not $distroInstalled) {
+        $driveName = $env:SystemDrive.TrimEnd(":")
+        $free = (Get-PSDrive -Name $driveName).Free
+        if ($free -lt 4GB) {
+            throw "Il faut au moins 4 Go libres sur $($env:SystemDrive) pour installer Ubuntu et meshtasticd."
+        }
+        Write-Host "Prerequis OK : $([math]::Round($free / 1GB, 1)) Go libres sur $($env:SystemDrive)"
+    }
+    if ((-not $distroInstalled -or -not $usbipdReady) -and -not (Test-MeshstickNetwork)) {
+        throw "Acces reseau requis vers GitHub, archive.ubuntu.com ou le PPA Meshtastic pour installer WSL, usbipd et meshtasticd."
+    }
+    if (-not $distroInstalled -or -not $usbipdReady) {
+        if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+            throw "winget est requis pour installer usbipd-win (et Google Chrome s'il manque). Installez App Installer depuis le Microsoft Store."
+        }
+        Write-Host "Prerequis OK : winget et reseau"
+    }
+}
+
+function Test-MeshstickWslPrereqs {
+    param([string]$DistributionName)
+
+    $wslList = (& wsl.exe -l -v 2>&1 | Out-String) -replace "`0", ""
+    if ($wslList -notmatch "(?m)^\s*\*?\s*$([regex]::Escape($DistributionName))\s+\S+\s+2\b") {
+        throw "$DistributionName doit etre en WSL 2. Commande : wsl --set-version $DistributionName 2"
+    }
+    Write-Host "Prerequis OK : $DistributionName en WSL 2"
+
+    $raw = (& wsl.exe -d $DistributionName -u root -- uname -r 2>&1 | Out-String) -replace "`0", ""
+    if ($raw -notmatch "(\d+)\.(\d+)\.(\d+)(?:\.(\d+))?") {
+        throw "Impossible de lire le noyau WSL (uname -r). Meshtastic exige un noyau superieur a 5.10.60.1."
+    }
+    $revision = 0
+    if ($Matches[4]) { $revision = [int]$Matches[4] }
+    $kernel = [version]::new([int]$Matches[1], [int]$Matches[2], [int]$Matches[3], $revision)
+    $minimum = [version]::new(5, 10, 60, 1)
+    if ($kernel -le $minimum) {
+        throw "Noyau WSL $kernel. Meshtastic exige un noyau superieur a 5.10.60.1. Dans un PowerShell administrateur : wsl --update"
+    }
+    Write-Host "Prerequis OK : noyau WSL $kernel"
+
+    $usbipdRaw = (& usbipd --version 2>&1 | Out-String)
+    if ($usbipdRaw -notmatch "(\d+)\.(\d+)\.(\d+)") {
+        throw "Version usbipd illisible. usbipd-win 4.0.0 ou plus recent est requis."
+    }
+    $usbipdVersion = [version]::new([int]$Matches[1], [int]$Matches[2], [int]$Matches[3])
+    if ($usbipdVersion -lt [version]::new(4, 0, 0)) {
+        throw "usbipd-win $usbipdVersion est trop ancien. La documentation Meshtastic demande la version 4.0.0 ou plus recente."
+    }
+    Write-Host "Prerequis OK : usbipd-win $usbipdVersion"
+}
+
 function Save-MeshstickIcon {
     param([string]$Path)
     Add-Type -AssemblyName System.Drawing
@@ -156,6 +264,8 @@ if (Install-MeshstickLayout) {
     exit 0
 }
 
+Test-MeshstickInstallPrereqs -DistributionName $Distribution
+
 function Start-MeshstickUbuntu {
     Start-Process -FilePath "wsl.exe" -ArgumentList @("-d", $Distribution, "-u", "root", "--", "sleep", "infinity") -WindowStyle Hidden | Out-Null
     $deadline = (Get-Date).AddSeconds(60)
@@ -166,12 +276,7 @@ function Start-MeshstickUbuntu {
     return [bool]($script:wslList -match "(?m)^\s*\*?\s*$([regex]::Escape($Distribution))\s+Running\b")
 }
 
-$os = Get-CimInstance Win32_OperatingSystem
-$build = [int]$os.BuildNumber
-if ($build -lt 19041) {
-    throw "Windows 10 version 2004 (build 19041) ou Windows 11 est requis. Build detecte : $build."
-}
-Write-Host "Installation Meshstick USB pour Windows (build $build)"
+Write-Host "Installation Meshstick USB pour Windows"
 
 $wslJustInstalled = $false
 $wslList = (& wsl.exe -l -v 2>&1 | Out-String) -replace "`0", ""
@@ -205,6 +310,17 @@ if (-not (Get-Command usbipd -ErrorAction SilentlyContinue)) {
     }
 }
 
+try {
+    $pnp = @(Get-PnpDevice -ErrorAction SilentlyContinue | Where-Object { $_.InstanceId -match "VID_1A86&PID_5512" })
+    foreach ($device in $pnp) {
+        if ($device.FriendlyName -match "COM\d+") {
+            Write-Warning "Le pilote serie WCH CH341 est charge sur la cle ($($device.FriendlyName)). L'installation va lier la cle a usbipd, chemin prevu pour Meshtastic."
+        }
+    }
+} catch {
+    Write-Host "Lecture des peripheriques USB ignoree."
+}
+
 Write-Host "Demarrage de $Distribution..."
 if (-not (Start-MeshstickUbuntu)) {
     if ($wslJustInstalled) {
@@ -212,6 +328,8 @@ if (-not (Start-MeshstickUbuntu)) {
     }
     throw "Impossible de demarrer $Distribution."
 }
+
+Test-MeshstickWslPrereqs -DistributionName $Distribution
 
 $systemdState = (& wsl.exe -d $Distribution -u root -- bash -c "if grep -Eq '^[[:space:]]*systemd[[:space:]]*=[[:space:]]*true' /etc/wsl.conf 2>/dev/null; then echo PRESENT; else printf '\n[boot]\nsystemd=true\n' >> /etc/wsl.conf; echo ADDED; fi" | Out-String) -replace "`0", ""
 if ($systemdState -match "ADDED") {

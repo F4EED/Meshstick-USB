@@ -9,6 +9,16 @@ fi
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 bash "$script_dir/meshstick-ensure.sh"
 
+if ! command -v lsusb >/dev/null 2>&1 || ! lsusb | grep -q '1a86:5512'; then
+    echo "Prerequis d'utilisation manquant : la cle Meshstick (1a86:5512) n'est pas branchee. Vissez l'antenne SMA, branchez la cle, puis relancez." >&2
+    exit 1
+fi
+if ! bash -c 'echo >/dev/tcp/127.0.0.1/9443' >/dev/null 2>&1; then
+    echo "Prerequis d'utilisation manquant : meshtasticd n'ecoute pas sur le port 9443." >&2
+    exit 1
+fi
+echo "Prerequis OK : cle branchee, interface https://127.0.0.1:9443"
+
 url="https://127.0.0.1:9443"
 echo "Interface : $url"
 if [ -z "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]; then

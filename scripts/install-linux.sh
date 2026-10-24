@@ -21,6 +21,49 @@ fi
 
 export DEBIAN_FRONTEND=noninteractive
 
+meshstick_network_ok() {
+    local host
+    for host in github.com ppa.launchpadcontent.net download.opensuse.org archive.ubuntu.com; do
+        if command -v curl >/dev/null 2>&1; then
+            curl -fsI --max-time 12 "https://$host/" >/dev/null 2>&1 && return 0
+        elif command -v wget >/dev/null 2>&1; then
+            wget -q --spider --timeout=12 "https://$host/" >/dev/null 2>&1 && return 0
+        elif command -v timeout >/dev/null 2>&1; then
+            timeout 8 bash -c "echo >/dev/tcp/$host/443" >/dev/null 2>&1 && return 0
+        fi
+    done
+    return 1
+}
+
+check_install_prereqs() {
+    local arch avail
+    arch=$(uname -m)
+    case "$arch" in
+        x86_64|aarch64|arm64)
+            echo "Prerequis OK : architecture $arch"
+            ;;
+        *)
+            echo "Architecture $arch non prise en charge pour meshtasticd. Attendu : x86_64 ou aarch64." >&2
+            exit 1
+            ;;
+    esac
+    avail=$(df -Pk / | awk 'NR==2 {print $4}')
+    if [ -z "${avail:-}" ] || [ "$avail" -lt 1048576 ]; then
+        echo "Il faut au moins 1 Go libre sur / pour installer meshtasticd et le client meshtastic." >&2
+        exit 1
+    fi
+    echo "Prerequis OK : $((avail / 1024)) Mo libres sur /"
+    if [ -x /usr/bin/meshtasticd ]; then
+        echo "Prerequis OK : meshtasticd deja installe"
+        return 0
+    fi
+    if ! meshstick_network_ok; then
+        echo "Acces reseau requis vers les depots Meshtastic (Launchpad, openSUSE ou archive.ubuntu.com)." >&2
+        exit 1
+    fi
+    echo "Prerequis OK : reseau"
+}
+
 install_root=/Apps/Meshstick
 repo_root=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
 if [ "$repo_root" != "$install_root" ]; then
@@ -102,6 +145,8 @@ install_debian() {
     apt-get install -y meshtasticd
 }
 
+check_install_prereqs
+
 case "${ID:-}" in
     ubuntu)
         install_ubuntu "${UBUNTU_CODENAME:-${VERSION_CODENAME:-}}"
@@ -133,12 +178,27 @@ case "${ID:-}" in
         ;;
 esac
 
+python3 - <<'PY'
+import sys
+version = "%d.%d.%d" % sys.version_info[:3]
+if sys.version_info < (3, 8):
+    raise SystemExit(
+        "Python 3.8 ou plus recent est requis pour le client meshtastic. Version trouvee : %s" % version
+    )
+print("Prerequis OK : Python %s" % version)
+PY
+
 if [ ! -x /root/.local/bin/meshtastic ]; then
     pipx install meshtastic
 fi
 if [ -x /root/.local/bin/meshtastic ]; then
     ln -sfn /root/.local/bin/meshtastic /usr/local/bin/meshtastic
 fi
+if ! command -v meshtastic >/dev/null 2>&1; then
+    echo "Le client meshtastic est introuvable apres pipx install." >&2
+    exit 1
+fi
+echo "Prerequis OK : client meshtastic"
 pipx ensurepath >/dev/null 2>&1 || true
 
 install -d /etc/udev/rules.d /usr/local/sbin /etc/systemd/system/meshtasticd.service.d /etc/meshtasticd

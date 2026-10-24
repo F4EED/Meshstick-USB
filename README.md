@@ -31,11 +31,58 @@ Faites ces gestes dans cet ordre. L’antenne se visse avant le branchement USB 
 3. Branchez la clé sur un port USB du PC, de préférence un port USB 2.0 directement sur la machine. Évitez un hub non alimenté.
 4. Laissez la clé branchée, antenne en place, pendant toute l’installation et pendant l’utilisation.
 
-### 2. Installer le logiciel
+### 2. Télécharger le script de lancement
 
-Le script installe `meshtasticd`, règle la radio pour la France (réseau [Gaulix](https://gaulix.fr/) : région `EU_868`, modem `LONG_MODERATE`, 869,4625 MHz, canaux `Fr_Balise`, `Fr_EMCOM`, `Fr_BlaBla` et `alerte`, clé `AQ==`) et prépare le lancement. La puissance réelle reste plafonnée à 22 dBm par le SX1262. Le module MQTT n’est pas activé.
+Le script de lancement est dans le dépôt [F4EED/Meshstick-USB](https://github.com/F4EED/Meshstick-USB). Le téléchargement récupère le dossier complet : le script de lancement appelle les autres scripts du même dossier. Une version figée est aussi sur la [page des versions](https://github.com/F4EED/Meshstick-USB/releases).
 
-**Windows 10 (version 2004 ou plus récente) et Windows 11.** Ouvrez PowerShell dans le dossier `Meshstick_USB` (clic droit dans le dossier, **Ouvrir dans le Terminal**). Collez :
+**Windows.** Ouvrez PowerShell et collez ces lignes. Le téléchargement se fait sans droits administrateur.
+
+```powershell
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+$ProgressPreference = "SilentlyContinue"
+$zip = Join-Path $env:TEMP "Meshstick-USB.zip"
+$extract = Join-Path $env:TEMP "Meshstick-USB-src"
+Invoke-WebRequest -Uri "https://github.com/F4EED/Meshstick-USB/archive/refs/heads/main.zip" -OutFile $zip
+if (Test-Path $extract) { Remove-Item $extract -Recurse -Force }
+Expand-Archive -Path $zip -DestinationPath $extract -Force
+Set-Location (Join-Path $extract "Meshstick-USB-main")
+```
+
+Le script de lancement Windows est `scripts\launch-meshstick.ps1`. Passez ensuite à l’installation : elle copie ce dossier vers `C:\Apps\Meshstick` et le raccourci bureau appelle `C:\Apps\Meshstick\scripts\launch-meshstick.ps1`.
+
+Si Git est déjà installé, le même dossier s’obtient avec :
+
+```powershell
+git clone https://github.com/F4EED/Meshstick-USB.git
+Set-Location .\Meshstick-USB
+```
+
+**Ubuntu, Linux Mint ou Debian.** Dans un terminal :
+
+```bash
+sudo apt update
+sudo apt install -y curl unzip ca-certificates
+tmp=$(mktemp -d)
+curl -fL "https://github.com/F4EED/Meshstick-USB/archive/refs/heads/main.zip" -o "$tmp/Meshstick-USB.zip"
+unzip -q "$tmp/Meshstick-USB.zip" -d "$tmp"
+cd "$tmp/Meshstick-USB-main"
+```
+
+Le script de lancement Linux est `scripts/launch-linux.sh`. L’installation le copie vers `/Apps/Meshstick/scripts/launch-linux.sh`. Le lanceur du bureau appelle ce chemin.
+
+Avec Git déjà installé :
+
+```bash
+sudo apt install -y git ca-certificates
+git clone https://github.com/F4EED/Meshstick-USB.git
+cd Meshstick-USB
+```
+
+### 3. Installer le logiciel
+
+Le script vérifie les prérequis Meshtastic, installe `meshtasticd`, règle la radio pour la France (réseau [Gaulix](https://gaulix.fr/) : région `EU_868`, modem `LONG_MODERATE`, 869,4625 MHz, canaux `Fr_Balise`, `Fr_EMCOM`, `Fr_BlaBla` et `alerte`, clé `AQ==`) et prépare le lancement. La puissance réelle reste plafonnée à 22 dBm par le SX1262. Le module MQTT n’est pas activé.
+
+**Windows 10 (version 2004 ou plus récente) et Windows 11.** Le PowerShell de l’étape précédente est déjà dans le dossier téléchargé. Sinon, ouvrez-le dans ce dossier (clic droit, **Ouvrir dans le Terminal**). Collez :
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\install-windows.ps1
@@ -43,7 +90,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\install-windows.ps1
 
 Acceptez la fenêtre **Contrôle de compte d’utilisateur**. Le script crée `C:\Apps\Meshstick`, y copie ce guide et les scripts, puis installe Ubuntu dans WSL 2 si besoin, usbipd, Google Chrome s’il manque, le démon, le pare-feu, une tâche à l’ouverture de session, et le raccourci bureau **Meshstick USB**. Le raccourci et la tâche utilisent `C:\Apps\Meshstick`, même si vous avez lancé l’installation depuis un autre dossier. Si le texte demande un redémarrage, redémarrez Windows puis relancez la même commande.
 
-**Ubuntu, Linux Mint ou Debian.** Dans un terminal ouvert dans le dossier `Meshstick_USB` :
+**Ubuntu, Linux Mint ou Debian.** Dans le terminal déjà ouvert dans le dossier téléchargé :
 
 ```bash
 sudo bash scripts/install-linux.sh
@@ -51,7 +98,7 @@ sudo bash scripts/install-linux.sh
 
 Saisissez le mot de passe Linux. Le script crée `/Apps/Meshstick`, y copie ce guide et les scripts, puis installe le démon, la règle USB, Chromium s’il n’y a pas déjà Chrome, et un lanceur **Meshstick USB**. Le lanceur ouvre `/Apps/Meshstick/scripts/launch-linux.sh`.
 
-### 3. Ouvrir l’interface
+### 4. Ouvrir l’interface
 
 **Windows.** Double-cliquez sur le raccourci **Meshstick USB** du bureau. C’est cette icône :
 
@@ -59,15 +106,15 @@ Saisissez le mot de passe Linux. Le script crée `/Apps/Meshstick`, y copie ce g
 
 Acceptez à nouveau le contrôle de compte. Chrome s’ouvre sur `https://127.0.0.1:9443`.
 
-**Linux.** Double-cliquez sur le lanceur **Meshstick USB**, ou lancez :
+**Linux.** Double-cliquez sur le lanceur **Meshstick USB**, ou lancez le script de lancement :
 
 ```bash
-sudo bash scripts/launch-linux.sh
+sudo bash /Apps/Meshstick/scripts/launch-linux.sh
 ```
 
 Le mot de passe est demandé dans le terminal. Chrome ou Chromium s’ouvre sur la même adresse.
 
-### 4. Accepter le certificat, puis connecter la clé
+### 5. Accepter le certificat, puis connecter la clé
 
 1. Chrome affiche **Votre connexion n’est pas privée**. Cliquez sur **Paramètres avancés**, puis sur **Continuer vers 127.0.0.1 (dangereux)**. La page **Meshtastic Web** s’affiche.
 2. Si l’écran dit **Aucun appareil connecté**, cliquez sur **Nouvelle connexion**.
@@ -116,9 +163,11 @@ Meshstick --USB--> usbipd-win --WSL2--> meshtasticd
 | [scripts/open-meshstick-browser.ps1](scripts/open-meshstick-browser.ps1) | Lance Chrome (Edge seulement si Chrome est absent), sans changer le navigateur par défaut de Windows |
 | [scripts/launch-linux.sh](scripts/launch-linux.sh) | Relance le service et ouvre l’interface dans Chrome ou Chromium |
 
+L’installation vérifie la machine avant de poser Meshtastic. Le lancement revérifie la clé `1a86:5512`, le démon, le client `meshtastic` et le port `9443` avant d’ouvrir Chrome. Le détail est dans les chapitres [Windows](#windows) et [Linux](#linux).
+
 ## Plusieurs ordinateurs
 
-Copiez le dossier sur chaque PC et lancez le script. L’installation crée ensuite son propre dossier : `C:\Apps\Meshstick` sous Windows, `/Apps/Meshstick` sous Linux. Le raccourci, la tâche et le lanceur pointent vers ce dossier.
+Téléchargez le dossier sur chaque PC, comme au paragraphe [2. Télécharger le script de lancement](#2-télécharger-le-script-de-lancement), puis lancez le script. L’installation crée ensuite son propre dossier : `C:\Apps\Meshstick` sous Windows, `/Apps/Meshstick` sous Linux. Le raccourci, la tâche et le lanceur pointent vers ce dossier.
 
 Chaque stick garde son propre identifiant radio. Pour les distinguer sur le réseau Gaulix, donnez un nom différent à chaque PC, une seule fois, à l’installation.
 
@@ -147,7 +196,7 @@ L’installation enregistre la tâche **Meshstick USB**. Elle part vingt seconde
 Le raccourci **Meshstick USB** sur le bureau fait la même préparation, puis ouvre Google Chrome sur [https://127.0.0.1:9443](https://127.0.0.1:9443). Le navigateur par défaut de Windows reste celui que vous avez choisi. Chrome est nécessaire pour les onglets **Série** (ports COM) et **Bluetooth** de l’interface. Si Chrome n’est pas installé, le raccourci ouvre Microsoft Edge, qui propose les mêmes onglets. Le journal de la tâche est `%ProgramData%\Meshstick\autostart.log`.
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\launch-meshstick.ps1
+powershell -ExecutionPolicy Bypass -File C:\Apps\Meshstick\scripts\launch-meshstick.ps1
 ```
 
 Contrôle :
@@ -161,7 +210,7 @@ La région affichée doit être `EU_868`.
 ### Linux
 
 ```bash
-sudo bash scripts/launch-linux.sh
+sudo bash /Apps/Meshstick/scripts/launch-linux.sh
 ```
 
 Après l’installation, le service est activé au démarrage. S’il a démarré avant le stick, une règle udev relance `meshtasticd` dès que `1a86:5512` apparaît, puis confirme la région `EU_868`. Sur un Linux natif, Avahi annonce le nœud sur le port `4403` et, si un pare-feu est déjà actif, les ports `4403` et `9443` sont ouverts.
@@ -177,7 +226,7 @@ Puis ouvrez [https://127.0.0.1:9443](https://127.0.0.1:9443) dans Chrome ou Chro
 
 ## Se connecter de nouveau
 
-Les clics sont les mêmes qu’à la première connexion, au paragraphe [4. Accepter le certificat, puis connecter la clé](#4-accepter-le-certificat-puis-connecter-la-clé).
+Les clics sont les mêmes qu’à la première connexion, au paragraphe [5. Accepter le certificat, puis connecter la clé](#5-accepter-le-certificat-puis-connecter-la-clé).
 
 1. Double-cliquez sur **Meshstick USB**.
 2. Acceptez le contrôle de compte sous Windows, ou le mot de passe sous Linux.
@@ -186,7 +235,7 @@ Les clics sont les mêmes qu’à la première connexion, au paragraphe [4. Acce
 
 ## Windows
 
-Prérequis : Windows 10 64 bits version 2004 (build 19041) ou plus récent, et Windows 11. Le même script `install-windows.ps1` couvre les deux. WSL 2 et une distribution Ubuntu sont nécessaires. La distribution `docker-desktop` seule ne convient pas : l’USB doit être attaché à Ubuntu.
+`install-windows.ps1` vérifie ces prérequis et s’arrête avec un message clair si l’un manque : Windows 10 64 bits version 2004 (build 19041) ou Windows 11, PowerShell 64 bits, virtualisation activée dans le firmware pour WSL 2, accès réseau, et 4 Go libres sur le disque système si Ubuntu n’est pas déjà installé. Le même script couvre Windows 10 et Windows 11. Après le démarrage d’Ubuntu, il exige WSL 2, un noyau supérieur à `5.10.60.1` et usbipd-win `4.0.0` ou plus récent, comme la [documentation Meshtastic pour WSL](https://meshtastic.org/docs/development/reference/md_wsl/). La distribution `docker-desktop` seule ne convient pas : l’USB doit être attaché à Ubuntu. Le script de lancement `launch-meshstick.ps1` revérifie ces points, la présence de la clé `1a86:5512`, puis l’écoute du port `9443`, avant d’ouvrir Chrome ou Edge.
 
 Installation en une commande, dans PowerShell, depuis le compte Windows qui utilisera le stick. Le script demande l’élévation, installe Ubuntu en WSL 2 si besoin, active systemd, installe usbipd et Google Chrome s’ils manquent, installe `meshtasticd`, règle la radio, ouvre le pare-feu, enregistre la tâche de session et crée le raccourci **Meshstick USB**. Branchez le stick, antenne vissée, avant de le lancer pour que la région `EU_868` soit posée tout de suite. S’il est branché plus tard, la tâche d’ouverture de session s’en charge. Si Windows vient d’installer WSL, le script s’arrête et demande un redémarrage : relancez la même commande après le reboot.
 
@@ -370,7 +419,7 @@ Le détail des trois onglets est dans [Se connecter](#se-connecter).
 
 ## Linux
 
-Sous Linux, branchez le stick directement. `usbipd` n’est pas nécessaire. Le script couvre Ubuntu 22.04, 24.04, 25.10 et 26.04, Linux Mint 21 et 22 (base Ubuntu), LMDE 6 et 7 (base Debian), Debian 12 et 13. Fedora, Raspberry Pi OS et OpenWrt ont leurs dépôts sur la [page d’installation](https://meshtastic.org/docs/meshtasticd/installation/).
+Sous Linux, branchez le stick directement. `usbipd` n’est pas nécessaire. Le script couvre Ubuntu 22.04, 24.04, 25.10 et 26.04, Linux Mint 21 et 22 (base Ubuntu), LMDE 6 et 7 (base Debian), Debian 12 et 13. Il vérifie l’architecture `x86_64` ou `aarch64`, au moins 1 Go libre sur `/`, l’accès aux dépôts Meshtastic, puis Python 3.8 ou plus récent pour le client `meshtastic`. `launch-linux.sh` revérifie la clé `1a86:5512`, systemd, le client et le port `9443`. Fedora, Raspberry Pi OS et OpenWrt ont leurs dépôts sur la [page d’installation](https://meshtastic.org/docs/meshtasticd/installation/).
 
 ```bash
 sudo bash scripts/install-linux.sh
