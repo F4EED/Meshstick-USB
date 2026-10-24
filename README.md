@@ -35,17 +35,25 @@ Faites ces gestes dans cet ordre. L’antenne se visse avant le branchement USB 
 
 Le script de lancement est dans le dépôt [F4EED/Meshstick-USB](https://github.com/F4EED/Meshstick-USB). Le téléchargement récupère le dossier complet : le script de lancement appelle les autres scripts du même dossier. Une version figée est aussi sur la [page des versions](https://github.com/F4EED/Meshstick-USB/releases).
 
-**Windows.** Ouvrez PowerShell et collez ces lignes. Le téléchargement se fait sans droits administrateur.
+**Windows.** Ouvrez PowerShell et collez ces lignes. Le téléchargement se fait sans droits administrateur. Il passe par .NET, puis ouvre le dossier obtenu. Cette voie fonctionne sur une tablette Windows 10 ou 11 Pro, y compris quand le dossier temporaire ou le moteur de téléchargement de PowerShell répond mal.
 
 ```powershell
+$ErrorActionPreference = "Stop"
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-$ProgressPreference = "SilentlyContinue"
-$zip = Join-Path $env:TEMP "Meshstick-USB.zip"
-$extract = Join-Path $env:TEMP "Meshstick-USB-src"
-Invoke-WebRequest -Uri "https://github.com/F4EED/Meshstick-USB/archive/refs/heads/main.zip" -OutFile $zip
-if (Test-Path $extract) { Remove-Item $extract -Recurse -Force }
-Expand-Archive -Path $zip -DestinationPath $extract -Force
-Set-Location (Join-Path $extract "Meshstick-USB-main")
+$temp = $env:TEMP
+if ([string]::IsNullOrWhiteSpace($temp)) { $temp = [System.IO.Path]::GetTempPath() }
+$zip = Join-Path $temp "Meshstick-USB.zip"
+$extract = Join-Path $temp "Meshstick-USB-src"
+if (Test-Path -LiteralPath $extract) { Remove-Item -LiteralPath $extract -Recurse -Force }
+New-Item -ItemType Directory -Force -Path $extract | Out-Null
+$client = New-Object System.Net.WebClient
+$client.Headers["User-Agent"] = "Meshstick-USB"
+$client.DownloadFile("https://github.com/F4EED/Meshstick-USB/archive/refs/heads/main.zip", $zip)
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+[System.IO.Compression.ZipFile]::ExtractToDirectory($zip, $extract)
+$dossier = Get-ChildItem -LiteralPath $extract -Directory | Select-Object -First 1
+Set-Location -LiteralPath $dossier.FullName
+Write-Host "Dossier pret : $($dossier.FullName)"
 ```
 
 Le script de lancement Windows est `scripts\launch-meshstick.ps1`. Passez ensuite à l’installation : elle copie ce dossier vers `C:\Apps\Meshstick` et le raccourci bureau appelle `C:\Apps\Meshstick\scripts\launch-meshstick.ps1`.
