@@ -1,0 +1,3 @@
+# Le service meshtasticd tourne sous l'utilisateur meshtasticd.
+# usbipd expose le CH341 en root:root 0664, ce qui donne errno 13 a libusb.
+ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="1a86", ATTR{idProduct}=="5512", MODE="0660", GROUP="meshtasticd", TAG+="systemd", ENV{SYSTEMD_WANTS}="meshstick-plug.service"

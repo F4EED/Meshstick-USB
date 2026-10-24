@@ -1,0 +1,9 @@
+[Unit]
+Description=Redemarre meshtasticd quand le Meshstick est branche
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/meshstick-usb-access
+ExecStart=/bin/systemctl reset-failed meshtasticd.service
+ExecStart=/bin/systemctl restart meshtasticd.service
+ExecStart=/usr/local/sbin/meshstick-configure
