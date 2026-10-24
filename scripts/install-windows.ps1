@@ -12,6 +12,8 @@
 param(
     [string]$Distribution = "Ubuntu",
     [string]$OwnerName = "Meshstick",
+    [string]$DesktopPath = "",
+    [string]$TaskUser = "",
     [switch]$ShortcutOnly
 )
 
@@ -22,6 +24,28 @@ function Test-IsAdmin {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = [Security.Principal.WindowsPrincipal]$identity
     return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
+function Show-MeshstickDialog {
+    param([string]$Message, [string]$Title = "Meshstick USB")
+    Write-Host $Message
+    try {
+        $dir = Join-Path $env:ProgramData "Meshstick"
+        New-Item -ItemType Directory -Force -Path $dir | Out-Null
+        Add-Content -Path (Join-Path $dir "install.log") -Value ("{0} {1}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $Message) -Encoding UTF8
+    } catch {
+    }
+    try {
+        Add-Type -AssemblyName System.Windows.Forms
+        [System.Windows.Forms.MessageBox]::Show($Message, $Title) | Out-Null
+    } catch {
+        Read-Host "Appuyez sur Entree pour fermer"
+    }
+}
+
+trap {
+    Show-MeshstickDialog $_.Exception.Message
+    exit 1
 }
 
 function Test-MeshstickNetwork {
@@ -194,12 +218,16 @@ function Save-MeshstickIcon {
 }
 
 function New-MeshstickShortcut {
+    param([string]$Desktop)
     $icon = Join-Path $PSScriptRoot "meshstick.ico"
     Save-MeshstickIcon -Path $icon
-    $desktop = [Environment]::GetFolderPath("Desktop")
-    if (-not (Test-Path $desktop)) {
-        throw "Dossier Bureau introuvable."
+    if (-not $Desktop) {
+        $Desktop = [Environment]::GetFolderPath("Desktop")
     }
+    if (-not (Test-Path -LiteralPath $Desktop)) {
+        New-Item -ItemType Directory -Force -Path $Desktop | Out-Null
+    }
+    $desktop = $Desktop
     $lnkPath = Join-Path $desktop "Meshstick USB.lnk"
     $launch = Join-Path $PSScriptRoot "launch-meshstick.ps1"
     $shell = New-Object -ComObject WScript.Shell
@@ -216,6 +244,7 @@ function New-MeshstickShortcut {
     $bytes[0x15] = $bytes[0x15] -bor 0x20
     [System.IO.File]::WriteAllBytes($lnkPath, $bytes)
     Write-Host "Raccourci bureau : $lnkPath"
+    return $lnkPath
 }
 
 function Install-MeshstickLayout {
@@ -244,23 +273,34 @@ function Install-MeshstickLayout {
     return $true
 }
 
+if (-not $DesktopPath) {
+    $DesktopPath = [Environment]::GetFolderPath("Desktop")
+}
+if (-not $TaskUser) {
+    $TaskUser = if ($env:USERDOMAIN) { "$env:USERDOMAIN\$env:USERNAME" } else { $env:USERNAME }
+}
+
 if ($ShortcutOnly) {
     if (Install-MeshstickLayout) {
-        & "C:\Apps\Meshstick\scripts\install-windows.ps1" -ShortcutOnly
+        & "C:\Apps\Meshstick\scripts\install-windows.ps1" -ShortcutOnly -DesktopPath $DesktopPath -TaskUser $TaskUser
     } else {
-        New-MeshstickShortcut
+        New-MeshstickShortcut -Desktop $DesktopPath
     }
     exit 0
 }
 
 if (-not (Test-IsAdmin)) {
-    $arg = "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" -Distribution `"$Distribution`" -OwnerName `"$OwnerName`""
+    $arg = "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" -Distribution `"$Distribution`" -OwnerName `"$OwnerName`" -DesktopPath `"$DesktopPath`" -TaskUser `"$TaskUser`""
     $elevated = Start-Process -FilePath "powershell.exe" -Verb RunAs -Wait -PassThru -ArgumentList $arg
+    if (-not $elevated) {
+        Show-MeshstickDialog "Installation annulee : le controle de compte a ete refuse."
+        exit 1
+    }
     exit $elevated.ExitCode
 }
 
 if (Install-MeshstickLayout) {
-    & "C:\Apps\Meshstick\scripts\install-windows.ps1" -Distribution $Distribution -OwnerName $OwnerName
+    & "C:\Apps\Meshstick\scripts\install-windows.ps1" -Distribution $Distribution -OwnerName $OwnerName -DesktopPath $DesktopPath -TaskUser $TaskUser
     exit 0
 }
 
@@ -372,7 +412,7 @@ foreach ($rule in @(
 $taskName = "Meshstick USB"
 $autoScript = Join-Path $PSScriptRoot "autostart-meshstick.ps1"
 $taskAction = New-ScheduledTaskAction -Execute "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$autoScript`""
-$taskUser = if ($env:USERDOMAIN) { "$env:USERDOMAIN\$env:USERNAME" } else { $env:USERNAME }
+$taskUser = $TaskUser
 $taskTrigger = New-ScheduledTaskTrigger -AtLogOn -User $taskUser
 $taskTrigger.Delay = "PT20S"
 $taskRepeat = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 2) -RepetitionDuration (New-TimeSpan -Days 9999)
@@ -386,7 +426,7 @@ if ($LASTEXITCODE -ne 0) {
     Write-Warning "Le noeud n'est pas encore en ligne. Branchez le stick : la tache planifiee reprendra."
 }
 
-New-MeshstickShortcut
+$shortcutPath = New-MeshstickShortcut -Desktop $DesktopPath
 
 . (Join-Path $PSScriptRoot "open-meshstick-browser.ps1")
 if (-not (Resolve-MeshstickChrome)) {
@@ -419,4 +459,4 @@ if ($webReady) {
     Write-Warning "L'interface web ne repond pas encore. Elle s'ouvrira au prochain branchement via le raccourci Meshstick USB."
 }
 
-Write-Host "Installation terminee. Raccourci bureau : Meshstick USB"
+Show-MeshstickDialog "Installation terminee. Le raccourci Meshstick USB est ici : $shortcutPath"
