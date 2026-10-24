@@ -88,8 +88,15 @@ if (-not (Get-Command usbipd -ErrorAction SilentlyContinue) -and (Test-Path "C:\
 }
 if (-not (Get-Command usbipd -ErrorAction SilentlyContinue)) {
     Write-MeshstickLog "usbipd introuvable."
-    Complete-Meshstick 1
+    Complete-Meshstick 10
     return
+}
+
+$usbipdService = Get-Service -Name "usbipd" -ErrorAction SilentlyContinue
+if ($usbipdService -and $usbipdService.Status -ne "Running") {
+    Write-MeshstickLog "Demarrage du service usbipd."
+    Start-Service usbipd
+    Start-Sleep -Seconds 2
 }
 
 Write-MeshstickLog "Demarrage de $Distribution"
@@ -103,7 +110,7 @@ do {
 } while (-not $running -and (Get-Date) -lt $deadline)
 if (-not $running) {
     Write-MeshstickLog "$Distribution n'a pas demarre."
-    Complete-Meshstick 1
+    Complete-Meshstick 10
     return
 }
 
@@ -136,12 +143,30 @@ if ($listed -notmatch [regex]::Escape($VidPid)) {
 
 & usbipd bind --hardware-id $VidPid 2>&1 | ForEach-Object { Write-MeshstickLog $_ }
 # Pas de --auto-attach : cette option bloque le processus dans une boucle.
-& usbipd attach --wsl $Distribution --hardware-id $VidPid 2>&1 | ForEach-Object { Write-MeshstickLog $_ }
-Start-Sleep -Seconds 2
-$seen = & wsl.exe -d $Distribution -u root -- lsusb
-Write-MeshstickLog ($seen | Out-String).Trim()
-if (($seen | Out-String) -notmatch "1a86:5512") {
-    Write-MeshstickLog "Le stick n'apparait pas dans lsusb."
+$attached = $false
+foreach ($try in 1..3) {
+    & usbipd attach --wsl $Distribution --hardware-id $VidPid 2>&1 | ForEach-Object { Write-MeshstickLog $_ }
+    Start-Sleep -Seconds 2
+    $usbipdList = (& usbipd list 2>&1 | Out-String)
+    $attached = $usbipdList -match ("(?m)" + [regex]::Escape($VidPid) + ".*\bAttached\b")
+    $seen = (& wsl.exe -d $Distribution -u root -- bash -c "command -v lsusb >/dev/null 2>&1 && lsusb || echo NO_LSUSB" 2>&1 | Out-String)
+    Write-MeshstickLog $seen.Trim()
+    if ($seen -match "1a86:5512") {
+        $attached = $true
+        break
+    }
+    # Ubuntu tout neuf n'a pas encore lsusb. usbipd suffit pour continuer l'installation.
+    if ($attached -and $seen -match "NO_LSUSB") {
+        break
+    }
+    $attached = $false
+}
+if (-not $attached) {
+    Write-MeshstickLog "Le stick n'apparait pas dans Ubuntu."
+    if ($SkipService) {
+        Complete-Meshstick 20
+        return
+    }
     Complete-Meshstick 1
     return
 }

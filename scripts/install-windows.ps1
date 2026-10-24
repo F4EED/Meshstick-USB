@@ -382,9 +382,19 @@ if ($systemdState -match "ADDED") {
 }
 
 Write-Host "Attache du stick s'il est branche..."
+$script:MeshstickAttachLater = $false
 & (Join-Path $PSScriptRoot "autostart-meshstick.ps1") -Distribution $Distribution -SkipService
-if ($LASTEXITCODE -ne 0) {
-    throw "Impossible de preparer Ubuntu ou d'attacher le stick. Journal : $env:ProgramData\Meshstick\autostart.log"
+$attachCode = $LASTEXITCODE
+if ($attachCode -eq 20) {
+    $script:MeshstickAttachLater = $true
+    Write-Host "La cle n'est pas encore visible dans Ubuntu. L'installation continue."
+} elseif ($attachCode -ne 0) {
+    $detail = ""
+    $attachLog = Join-Path $env:ProgramData "Meshstick\autostart.log"
+    if (Test-Path -LiteralPath $attachLog) {
+        $detail = ((Get-Content -LiteralPath $attachLog -Tail 12) -join "`n")
+    }
+    throw "Ubuntu n'est pas pret.`n$detail"
 }
 
 $linuxScriptWin = Join-Path $PSScriptRoot "install-linux.sh"
@@ -459,4 +469,8 @@ if ($webReady) {
     Write-Warning "L'interface web ne repond pas encore. Elle s'ouvrira au prochain branchement via le raccourci Meshstick USB."
 }
 
-Show-MeshstickDialog "Installation terminee. Le raccourci Meshstick USB est ici : $shortcutPath"
+$done = "Installation terminee. Le raccourci Meshstick USB est ici : $shortcutPath"
+if ($script:MeshstickAttachLater) {
+    $done += "`n`nLa cle n'etait pas encore attachee a Ubuntu. Ouvrez le raccourci Meshstick USB. S'il manque encore, debranchez la cle, rebranchez-la, puis rouvrez le raccourci."
+}
+Show-MeshstickDialog $done
