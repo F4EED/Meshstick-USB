@@ -41,7 +41,13 @@ La ligne télécharge le dossier, vérifie les prérequis, installe `meshtasticd
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; $t = if ($env:TEMP) { $env:TEMP } else { [IO.Path]::GetTempPath() }; $z = Join-Path $t "Meshstick-USB.zip"; $e = Join-Path $t "Meshstick-USB-src"; if (Test-Path $e) { Remove-Item $e -Recurse -Force }; New-Item -ItemType Directory -Force -Path $e | Out-Null; $c = New-Object Net.WebClient; $c.Headers["User-Agent"] = "Meshstick"; $c.DownloadFile("https://github.com/F4EED/Meshstick-USB/archive/refs/heads/main.zip", $z); Add-Type -AssemblyName System.IO.Compression.FileSystem; [IO.Compression.ZipFile]::ExtractToDirectory($z, $e); $f = Join-Path (Get-ChildItem $e -Directory | Select-Object -First 1).FullName "scripts\install-windows.ps1"; if ($env:MESHSTICK_OWNER) { & $f -OwnerName $env:MESHSTICK_OWNER } else { & $f }
 ```
 
-Acceptez **Contrôle de compte d’utilisateur**. Le script crée `C:\Apps\Meshstick`, installe Ubuntu dans WSL 2 si besoin, usbipd, Google Chrome s’il manque, le démon, le pare-feu, une tâche à l’ouverture de session, et le raccourci bureau **Meshstick USB**. Si le texte demande un redémarrage, redémarrez Windows puis collez la même ligne.
+Acceptez **Contrôle de compte d’utilisateur**. Le script crée `C:\Apps\Meshstick`, installe Ubuntu dans WSL 2 si besoin, usbipd, Google Chrome s’il manque, le démon, le pare-feu, une tâche à l’ouverture de session, et le raccourci bureau **Meshstick USB**. Le raccourci est posé sur le bureau du compte qui a collé la ligne.
+
+Une boîte de dialogue reste ouverte jusqu’au clic sur **OK**. En fin d’installation, elle indique le chemin du raccourci. Si une erreur survient, le même texte reste dans cette boîte et dans `%ProgramData%\Meshstick\install.log`. Le détail de l’attache USB est dans `%ProgramData%\Meshstick\autostart.log`.
+
+Un Ubuntu tout juste installé n’a pas encore la commande `lsusb`. La clé peut donc être branchée sans apparaître tout de suite dans Ubuntu. L’installation continue quand même et pose le raccourci. La boîte de fin le signale : ouvrez **Meshstick USB**, ou débranchez la clé, rebranchez-la, puis rouvrez le raccourci.
+
+Si la boîte demande un redémarrage, redémarrez Windows puis collez la même ligne.
 
 **Ubuntu, Linux Mint ou Debian.** Dans un terminal, collez la ligne et saisissez le mot de passe.
 
@@ -190,7 +196,9 @@ Les clics sont les mêmes qu’à la première connexion, au paragraphe [4. Acce
 
 `install-windows.ps1` vérifie ces prérequis et s’arrête avec un message clair si l’un manque : Windows 10 64 bits version 2004 (build 19041) ou Windows 11, PowerShell 64 bits, virtualisation activée dans le firmware pour WSL 2, accès réseau, et 4 Go libres sur le disque système si Ubuntu n’est pas déjà installé. Le même script couvre Windows 10 et Windows 11. Après le démarrage d’Ubuntu, il exige WSL 2, un noyau supérieur à `5.10.60.1` et usbipd-win `4.0.0` ou plus récent, comme la [documentation Meshtastic pour WSL](https://meshtastic.org/docs/development/reference/md_wsl/). La distribution `docker-desktop` seule ne convient pas : l’USB doit être attaché à Ubuntu. Le script de lancement `launch-meshstick.ps1` revérifie ces points, la présence de la clé `1a86:5512`, puis l’écoute du port `9443`, avant d’ouvrir Chrome ou Edge.
 
-Installation en une commande, dans PowerShell, depuis le compte Windows qui utilisera le stick. Le script demande l’élévation, installe Ubuntu en WSL 2 si besoin, active systemd, installe usbipd et Google Chrome s’ils manquent, installe `meshtasticd`, règle la radio, ouvre le pare-feu, enregistre la tâche de session et crée le raccourci **Meshstick USB**. Branchez le stick, antenne vissée, avant de le lancer pour que la région `EU_868` soit posée tout de suite. S’il est branché plus tard, la tâche d’ouverture de session s’en charge. Si Windows vient d’installer WSL, le script s’arrête et demande un redémarrage : relancez la même commande après le reboot.
+L’installation habituelle est la ligne du paragraphe [2. Installer](#2-installer), collée dans PowerShell depuis le compte Windows qui utilisera le stick. Le script demande l’élévation, installe Ubuntu en WSL 2 si besoin, active systemd, installe usbipd et Google Chrome s’ils manquent, installe `meshtasticd`, règle la radio, ouvre le pare-feu, enregistre la tâche de session et crée le raccourci **Meshstick USB** sur le bureau de ce compte. Branchez le stick, antenne vissée, avant de le lancer pour que la région `EU_868` soit posée tout de suite. S’il est branché plus tard, la tâche d’ouverture de session et le raccourci s’en chargent. Si la clé est branchée mais qu’Ubuntu n’a pas encore `lsusb`, l’installation ne s’arrête pas : le raccourci est créé et réessaie l’attache. Si Windows vient d’installer WSL, la boîte de dialogue demande un redémarrage : collez la même ligne après le reboot. Une erreur reste affichée jusqu’au clic sur **OK**, et elle est copiée dans `%ProgramData%\Meshstick\install.log`.
+
+Depuis un dossier déjà téléchargé, l’équivalent est :
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\install-windows.ps1
@@ -477,8 +485,10 @@ meshtastic --host localhost --info
 
 | Symptôme | Piste |
 | --- | --- |
-| `usbipd list` ne montre pas `1a86:5512` | Antenne hors sujet : le stick n’est pas vu par Windows. Changez de port USB, évitez le hub, regardez le Gestionnaire de périphériques. |
-| `attach` échoue ou Ubuntu ne voit rien dans `lsusb` | PowerShell doit être élevé. La distribution doit être Ubuntu en WSL 2, pas `docker-desktop`. Relancez `scripts/attach-meshstick.ps1`. |
+| `usbipd list` ne montre pas `1a86:5512` | Le stick n’est pas vu par Windows. Changez de port USB, évitez le hub, regardez le Gestionnaire de périphériques. |
+| La boîte dit qu’Ubuntu n’est pas prêt | Le texte de la boîte reprend les dernières lignes de `%ProgramData%\Meshstick\autostart.log`. Ubuntu doit être la distribution WSL 2 utilisée pour la clé. Après un redémarrage demandé par Windows, recollez la ligne d’installation. |
+| La boîte de fin dit que la clé n’était pas encore attachée | Ubuntu vient d’être installé et n’avait pas `lsusb`. Le raccourci **Meshstick USB** est déjà sur le bureau. Ouvrez-le. S’il manque encore, débranchez la clé, rebranchez-la, puis rouvrez le raccourci. |
+| `attach` échoue ou Ubuntu ne voit rien dans `lsusb` | PowerShell doit être élevé. La distribution doit être Ubuntu en WSL 2. Le service Windows `usbipd` doit tourner. Relancez le raccourci **Meshstick USB**, ou `scripts/attach-meshstick.ps1`. |
 | Le stick disparaît après un reboot | Ouvrez une session Windows et attendez la tâche **Meshstick USB** (environ 20 s), ou double-cliquez sur le raccourci. Journal : `%ProgramData%\Meshstick\autostart.log`. |
 | `meshtasticd` ne parle pas de `MESHSTICK 1262` | Copiez `lora-usb-meshstick-1262.yaml` dans `/etc/meshtasticd/config.d/` et relancez. |
 | `libusb` `errno 13` ou `write access` | Le nœud USB n’est pas accessible à l’utilisateur `meshtasticd`. Installez `scripts/99-meshstick.rules` (voir plus haut), puis `sudo systemctl reset-failed meshtasticd` et `sudo systemctl restart meshtasticd`. |
