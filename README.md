@@ -76,6 +76,22 @@ Le mot de passe est demandé dans le terminal. Chrome ou Chromium s’ouvre sur 
 
 Les onglets **Série** et **Bluetooth** restent vides pour cette clé. **Série** ouvre le sélecteur de ports COM de Chrome. **Bluetooth** ouvre le sélecteur Bluetooth. La Meshstick Elecrow n’est ni un port COM, ni un appareil Bluetooth.
 
+## Une fois connecté
+
+La clé branchée sur le PC rejoint le réseau. L’interface est celle de Meshtastic dans Chrome.
+
+Le canal principal `Fr_Balise` liste les nœuds entendus. Ici, une trentaine de stations du réseau, avec le nom court à gauche de chaque ligne.
+
+![Canal Fr_Balise et liste des nœuds entendus](images/messages-fr-balise.png)
+
+La carte place ces nœuds. Les pastilles sont les noms courts reçus par la clé.
+
+![Carte des nœuds entendus par le Meshstick](images/carte-noeuds.jpg)
+
+Sur `Fr_BlaBla`, un message parti du Meshstick sous Windows arrive sur un autre nœud, ici un Heltec, qui répond.
+
+![Échange sur le canal Fr_BlaBla](images/messages-fr-blabla.png)
+
 Sous Windows, le programme du nœud tourne dans Ubuntu grâce à [WSL 2 et usbipd](https://meshtastic.org/docs/development/reference/md_wsl/). Sous Linux, le même programme tourne directement sur la machine.
 
 ```text
